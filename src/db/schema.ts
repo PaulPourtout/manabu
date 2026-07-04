@@ -57,6 +57,20 @@ export const progressStatusEnum = pgEnum('progress_status', [
   'completed',
 ])
 
+// --- Types du contenu variable (jsonb) — sérialisables ---
+export type StepMedia = { type: 'image' | 'audio'; url: string; alt?: string }
+export type ContentBody = { title?: string; body: string; media?: StepMedia }
+export type QuizData = {
+  choices?: string[]
+  correctIndex?: number
+  correctIndexes?: number[]
+  pairs?: { left: string; right: string }[]
+  answer?: string
+  acceptableAnswers?: string[]
+  tokens?: string[]
+  correctOrder?: number[]
+}
+
 // ---------------------------------------------------------------------------
 // Contenu pédagogique
 // ---------------------------------------------------------------------------
@@ -117,7 +131,7 @@ export const lessonSteps = pgTable(
     position: integer('position').notNull().default(0),
     type: stepTypeEnum('type').notNull(),
     // Pour type=content : { title?, body(markdown), media? }
-    contentBody: jsonb('content_body'),
+    contentBody: jsonb('content_body').$type<ContentBody>(),
   },
   (t) => [index('lesson_steps_lesson_id_idx').on(t.lessonId)],
 )
@@ -133,7 +147,7 @@ export const quizQuestions = pgTable(
     prompt: text('prompt').notNull(),
     explanation: text('explanation'),
     // Payload variable selon `type` (choices/correctIndex, pairs, tokens, etc.)
-    data: jsonb('data').notNull(),
+    data: jsonb('data').$type<QuizData>().notNull(),
   },
   (t) => [unique('quiz_questions_lesson_step_id_unique').on(t.lessonStepId)],
 )
@@ -160,7 +174,7 @@ export const userLessonProgress = pgTable(
     }),
     heartsRemaining: integer('hearts_remaining'),
     // Ids d'étapes quiz ratées à re-présenter avant la fin (file de remise).
-    requeueStepIds: jsonb('requeue_step_ids'),
+    requeueStepIds: jsonb('requeue_step_ids').$type<string[]>(),
     // Vrai tant qu'aucune vie n'a été perdue sur la tentative en cours/complétée.
     perfect: boolean('perfect'),
 
