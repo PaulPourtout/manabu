@@ -49,16 +49,16 @@ Hiérarchie : **Cours → Unités → Leçons → Étapes (steps)**.
 1. L'apprenant sélectionne une leçon débloquée depuis la carte de parcours (« learning path »).
 2. Il avance étape par étape (barre de progression en haut, façon Duolingo).
 3. Sur les étapes de quiz, il répond ; feedback immédiat (correct/incorrect), explication optionnelle.
-4. Une réponse incorrecte peut coûter une **vie** (cf. gamification) ou juste être comptabilisée pour le score final de la leçon.
-5. À la fin de la leçon : écran de résultat (score, XP gagné, streak mis à jour, vies restantes, éventuel badge débloqué).
-6. La progression est sauvegardée immédiatement en base à chaque étape validée (reprise possible si l'utilisateur quitte en cours de route).
+4. Une réponse incorrecte coûte une **vie** et la question est **remise en fin de leçon** (à re-réussir pour terminer) — cf. gamification. Il n'y a pas de note en pourcentage.
+5. La leçon est **terminée** quand toutes les questions ont été finalement réussies sans tomber à 0 vie ; écran de résultat (XP gagné, streak mis à jour, éventuel badge). Si les vies tombent à 0, la tentative échoue et peut être **recommencée immédiatement**.
+6. L'état de la tentative (étape courante, vies, file de remise) est sauvegardé à chaque étape validée : reprise à l'identique si l'utilisateur quitte en cours de route.
 
 ### 4.4 Gamification (niveau complet)
 
-- **XP** : gagné à la complétion de chaque leçon (bonus si score parfait), affiché sur le profil et potentiellement un classement.
-- **Streak (série de jours)** : incrémenté chaque jour où l'utilisateur complète au moins une leçon ; remise à zéro si un jour est manqué (avec tolérance/« gel de streak » envisageable en v2).
-- **Vies (hearts)** : nombre de vies limité (ex. 5) consommées par mauvaise réponse en quiz ; à 0 vie, la leçon en cours est bloquée jusqu'à régénération (par temps, ou en la recommençant). Pas de monétisation en v1 (pas d'achat de vies).
-- **Niveaux / déverrouillage progressif** : unités et leçons verrouillées tant que le prérequis n'est pas rempli.
+- **XP** : gagné à la complétion de chaque leçon (bonus si leçon **parfaite** = aucune vie perdue), affiché sur le profil et potentiellement un classement.
+- **Streak (série de jours)** : incrémenté chaque jour où l'utilisateur complète au moins une leçon, calculé dans **son fuseau horaire** ; remise à zéro si un jour est manqué (« gel de streak » envisageable en v2).
+- **Vies (hearts) par tentative** : chaque tentative de leçon démarre avec des vies fraîches (défaut 3), consommées par mauvaise réponse ; à 0 vie, la tentative échoue et peut être **recommencée immédiatement** (pas de stock global entre leçons, pas d'attente/régénération, pas d'achat de vies). Voir ADR 0001.
+- **Niveaux / déverrouillage progressif** : leçons débloquées en **ordre linéaire strict** au sein d'un cours (la première est ouverte ; chacune ouvre la suivante).
 - **Badges / succès** : obtenus sur critères (ex. « 7 jours de streak », « première leçon parfaite », « cours terminé »).
 - _Hors v1 (envisageable v2)_ : classement social entre amis, ligues hebdomadaires, notifications de rappel.
 

@@ -1,6 +1,6 @@
 # Manabu — Architecture technique
 
-Complète `docs/PRD.md`. Décisions techniques validées avec l'utilisateur : **Clerk** (auth en SaaS tiers), **Drizzle ORM**, gamification complète, **Docker dev + prod**.
+Complète `docs/PRD.md`. Décisions techniques validées avec l'utilisateur : **Better Auth** (auth auto-hébergée + MFA, voir ADR 0003), **Drizzle ORM**, gamification complète (complétion pilotée par les vies, ADR 0001), **Docker dev + prod**. Voir aussi `CONTEXT.md` (glossaire) et `docs/adr/`.
 
 ## 1. Stack technique
 
@@ -14,7 +14,7 @@ Complète `docs/PRD.md`. Décisions techniques validées avec l'utilisateur : **
 | État client léger       | **Zustand** (ou `useState`/context) pour l'état éphémère d'une session de leçon (vies restantes pendant la leçon en cours, étape courante) | Évite de solliciter le serveur à chaque frame ; sync en base à la fin de chaque étape.                                                                                     |
 | ORM                     | **Drizzle ORM** + `drizzle-kit` (migrations)                                                                                               | Léger, SQL-first, typé, bon fit Vite/serverless-friendly.                                                                                                                  |
 | Base de données         | **PostgreSQL 16**                                                                                                                          | Relationnel, robuste, adapté au modèle hiérarchique cours/unités/leçons.                                                                                                   |
-| Authentification        | **Clerk**                                                                                                                                  | SaaS d'auth géré : inscription/connexion, sessions, hashing des mots de passe, OAuth (Google, etc.) prêts à l'emploi sans les héberger nous-mêmes ; composants UI React fournis. |
+| Authentification        | **Better Auth** (auto-hébergé)                                                                                                              | Auth dans notre Postgres (adapter Drizzle) : email/mot de passe, sessions, **MFA gratuite** (TOTP + codes de secours), rôles + bannissement via le plugin admin. Pas de lock-in. Voir ADR 0003. |
 | Validation              | **Zod**                                                                                                                                    | Validation des formulaires, des payloads de server functions, et du fichier JSON importé au back-office.                                                                   |
 | Tests                   | **Vitest** (unitaire/composants) + **Playwright** (e2e critique : login, faire une leçon)                                                  | Confiance sur les parcours critiques sans sur-investir en v1.                                                                                                              |
 | Conteneurisation        | **Docker** + **docker-compose** (profils dev/prod)                                                                                         | Un seul point d'entrée pour lancer app + DB.                                                                                                                               |
@@ -58,7 +58,9 @@ manabu/
 │   │   │   ├── client.ts           # connexion pg + drizzle()
 │   │   │   └── seed.ts
 │   │   ├── auth/
-│   │   │   └── clerk.ts            # config Clerk (middleware, helpers serveur)
+│   │   │   ├── auth.ts             # config serveur Better Auth (plugins MFA/admin)
+│   │   │   ├── auth-client.ts      # client Better Auth (navigateur)
+│   │   │   └── session.ts          # guards requireUser / requireAdmin
 │   │   ├── functions/              # server functions (createServerFn)
 │   │   │   ├── lessons.ts
 │   │   │   ├── quizzes.ts
@@ -87,11 +89,14 @@ manabu/
 ## 3. Modèle de données (schéma Drizzle — vue logique)
 
 ```
-user_profiles                      -- pas de mot de passe/session ici : gérés par Clerk
-  id, clerk_user_id (unique, provenant de Clerk), name, avatar_url,
-  role ('learner' | 'admin'),
-  xp_total, current_streak, longest_streak, last_activity_date,
-  hearts, hearts_refill_at, created_at
+user                               -- table Better Auth (voir src/db/auth-schema.ts)
+  id (text), name, email (unique), email_verified, image,
+  two_factor_enabled,
+  role ('learner' | 'admin'), banned, ban_reason, ban_expires,   -- plugin admin
+  xp_total, current_streak, longest_streak, last_activity_date,  -- champs app
+  timezone,                                                      -- fuseau de l'apprenant
+  created_at, updated_at
+session / account / verification / two_factor   -- tables Better Auth
 
 courses
   id, title, description, slug, is_published, created_at, updated_at
@@ -100,8 +105,8 @@ units
   id, course_id (FK), title, position, is_published
 
 lessons
-  id, unit_id (FK), title, position, is_published,
-  pass_threshold (ex. 0.7)
+  id, unit_id (FK), title, position, is_published
+  -- pas de pass_threshold : la complétion est pilotée par les vies (ADR 0001)
 
 lesson_steps
   id, lesson_id (FK), position, type ('content' | 'quiz'),
@@ -112,13 +117,14 @@ quiz_questions
   type ('single_choice' | 'multiple_choice' | 'match' | 'fill_blank' | 'reorder'),
   prompt, explanation, data (jsonb : choix/réponses selon le type)
 
-user_lesson_progress
-  id, user_id (FK), lesson_id (FK),
+user_lesson_progress               -- progression + état de la tentative en cours
+  id, user_id (FK->user), lesson_id (FK),
   status ('not_started' | 'in_progress' | 'completed'),
-  best_score, last_attempt_at, completed_at
+  current_step_id, hearts_remaining, requeue_step_ids (jsonb), perfect,  -- reprise
+  last_attempt_at, completed_at, updated_at
 
-user_step_attempts                 -- historique fin, sert à reprendre en cours de leçon
-  id, user_id (FK), lesson_step_id (FK), is_correct, answered_at
+user_step_attempts                 -- journal des réponses
+  id, user_id (FK->user), lesson_step_id (FK), is_correct, answered_at
 
 badges
   id, code, title, description, icon
@@ -168,14 +174,17 @@ Aperçu de la forme générale :
 
 ## 5. Authentification & autorisation
 
-- **Clerk** gère l'inscription/connexion (email + mot de passe, OAuth possible dès v1 sans effort supplémentaire), les sessions et leurs cookies/JWT — rien de tout cela n'est stocké dans notre Postgres.
-- À la création d'un compte Clerk (webhook `user.created`), on crée en miroir une ligne dans `user_profiles` (Postgres, via Drizzle) portant `clerk_user_id` + les champs propres à l'app (rôle, XP, streak, vies). Le rôle `admin` est positionné manuellement (ou via les `publicMetadata` Clerk, synchronisés au même endroit).
-- Middleware / guard sur les routes `admin/*` et sur les server functions sensibles : vérification côté serveur de la session Clerk (`auth()`) **et** du rôle stocké dans `user_profiles` — jamais une vérification côté client seule.
-- Le SDK `@clerk/tanstack-react-start` fournit les composants (`<SignIn />`, `<SignUp />`, `<UserButton />`) et les helpers serveur pour protéger routes et server functions.
-- **MFA** : géré nativement par Clerk (TOTP via app d'authentification, SMS OTP, backup codes). Configuré dans le dashboard Clerk :
-  - **obligatoire** pour le rôle `admin` — appliqué via une règle Clerk (ou vérification serveur `sessionClaims`/`has()` qui refuse l'accès à `admin/*` tant que le second facteur n'est pas enrôlé) ;
-  - **optionnel** pour le rôle `learner`, activable depuis `<UserProfile />` sans développement supplémentaire.
-  - Le composant `<SignIn />` gère automatiquement l'étape de vérification du second facteur ; en cas de flow de connexion custom, il faut gérer explicitement le statut intermédiaire `needs_second_factor`.
+Voir ADR 0003 pour le choix de Better Auth.
+
+- **Better Auth** gère l'inscription/connexion (email + mot de passe), les sessions et cookies, **dans notre PostgreSQL** (adapter Drizzle). Config serveur `src/lib/auth/auth.ts`, client `src/lib/auth/auth-client.ts`, endpoint `/api/auth/$`.
+- **Rôle** : champ `user.role` (`learner` par défaut, `admin`), **possédé par notre base**. Bootstrap du 1er admin par `UPDATE "user" SET role='admin' WHERE email='…'` ; promotions ultérieures via la page user-management.
+- **Guards** (`src/lib/auth/session.ts`) sur les routes `admin/*` et les server functions sensibles : vérification **côté serveur** de la session + du rôle — jamais une vérification côté client seule.
+- **MFA** (plugin `twoFactor` : TOTP + codes de secours, gratuit) :
+  - **obligatoire** pour le rôle `admin` — contrôle serveur qui refuse l'accès à `admin/*` tant que le second facteur n'est pas enrôlé ;
+  - **optionnelle** pour le rôle `learner`, activable depuis le profil ;
+  - flag d'env pour assouplir l'exigence en dev.
+- **Désactivation de compte** : ban/unban via le plugin `admin` (réversible, non destructif).
+- **Emails** (vérification / réinitialisation) : nécessitent un provider d'envoi à brancher ; désactivés en dev.
 
 ## 6. Mobile-first & responsive
 
@@ -202,14 +211,14 @@ Aperçu de la forme générale :
 
 ```
 DATABASE_URL=postgres://manabu:manabu@db:5432/manabu
-CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
-CLERK_WEBHOOK_SECRET=whsec_...
+BETTER_AUTH_SECRET=...            # openssl rand -hex 32
+BETTER_AUTH_URL=http://localhost:3000
+# Email (vérif/reset) — à brancher : SMTP_URL=...
 NODE_ENV=development
 PORT=3000
 ```
 
-> Les clés Clerk sont propres à chaque environnement (instance de dev/staging/prod dans le dashboard Clerk) — à ne jamais committer, seulement dans `.env` local et les secrets du déploiement.
+> `BETTER_AUTH_SECRET` est propre à chaque environnement — à ne jamais committer, seulement dans `.env` local et les secrets du déploiement.
 
 ## 9. Scripts principaux (`package.json`)
 
@@ -219,7 +228,7 @@ build          → build de production
 start          → lance le serveur buildé
 db:generate    → drizzle-kit generate (nouvelles migrations depuis le schéma)
 db:migrate     → drizzle-kit migrate (applique les migrations)
-db:seed        → script de seed (données de démo + compte admin par défaut)
+db:seed        → script de seed (contenu de démo + badges ; pas de compte)
 test           → vitest
 test:e2e       → playwright test
 ```
@@ -227,7 +236,7 @@ test:e2e       → playwright test
 ## 10. Roadmap de mise en œuvre proposée
 
 1. **Bootstrap** : scaffold TanStack Start + TypeScript + Tailwind + shadcn/ui, Docker Compose (db + app dev), connexion Drizzle ↔ Postgres, `pnpm dev` fonctionnel.
-2. **Auth** : intégration Clerk (inscription/connexion/déconnexion), webhook de synchronisation vers `user_profiles`, rôle `admin`/`learner`, route guard back-office.
+2. **Auth** : intégration Better Auth (inscription/connexion/déconnexion), MFA, rôle `admin`/`learner` en base, guards back-office. *(fondation déjà posée : config, route `/api/auth/$`, tables auth, sign-up testé)*
 3. **Modèle de données & back-office CRUD** : schéma Drizzle + migrations, CRUD cours/unités/leçons/quiz basique en back-office.
 4. **Import JSON** : schéma Zod, page d'upload, validation + insertion transactionnelle, prévisualisation.
 5. **Player de leçon** : rendu des étapes de contenu et de quiz (types principaux), sauvegarde de progression par étape, écran de résultat.
@@ -235,10 +244,21 @@ test:e2e       → playwright test
 7. **Polish mobile-first & accessibilité**, tests e2e des parcours critiques.
 8. **Dockerfile de prod** (multi-stage) + configuration `docker-compose.prod.yml`, documentation de déploiement.
 
-## 11. Points à trancher plus tard (non bloquants pour démarrer)
+## 11. Points tranchés / à trancher
 
-- Politique exacte de régénération des vies (temps fixe ? une par X heures ?).
-- Faut-il un mode « pas de vies » pour certains cours (ex. contenu non compétitif) ?
-- Activation d'OAuth (Google, etc.) — simple bascule dans le dashboard Clerk, sans migration de données.
-- Plan Clerk à choisir (le tier gratuit suffit largement pour le développement et une démo).
-- Multi-cours en parallèle pour un même utilisateur : autorisé dès la v1 (pas de restriction à un seul cours actif).
+Décisions actées lors du grilling (voir `CONTEXT.md` et `docs/adr/`) :
+
+- **Complétion pilotée par les vies**, sans seuil de score ; **vies par tentative** (défaut 3), remise en file des questions ratées, échec → reprise immédiate, **pas de timer de régénération** (ADR 0001).
+- **Reprise en cours de leçon** persistée (étape + vies + file).
+- **Déverrouillage linéaire strict** (séquence aplatie).
+- **Streak** calculé dans le **fuseau de l'apprenant** (`user.timezone`).
+- **Better Auth** auto-hébergé, rôle en base, MFA gratuite ; bootstrap admin par SQL (ADR 0003).
+- **Import = création seule** (slug en conflit → nouveau slug).
+- **Preview interactive à blanc** ; **contenu assaini** (Markdown sans HTML brut, médias HTTPS image/audio).
+
+Restant à préciser (non bloquant) :
+
+- Montants exacts d'XP (base + bonus « parfait »).
+- Détection/stockage du fuseau utilisateur (fallback si absent).
+- Branchement du provider d'emails (vérification / réinitialisation).
+- Activation future d'OAuth (plugin Better Auth), notifications, ligues (v2).

@@ -20,7 +20,6 @@ Le fichier est validé côté serveur avec un schéma **Zod** avant toute insert
       "lessons": [
         {
           "title": "Dire bonjour",
-          "passThreshold": 0.7,
           "steps": [ /* voir section 2 */ ]
         }
       ]
@@ -33,7 +32,8 @@ Le fichier est validé côté serveur avec un schéma **Zod** avant toute insert
 - `isPublished` : optionnel, `false` par défaut → le cours importé est un brouillon tant qu'un admin ne le publie pas explicitement.
 - `units` : tableau ordonné (l'ordre du tableau = ordre d'affichage/déverrouillage).
 - `lessons` : idem, ordonné au sein d'une unité.
-- `passThreshold` : optionnel par leçon (défaut global 0.7 = 70% de bonnes réponses pour débloquer la suite).
+
+> Il n'y a **pas** de seuil de score par leçon : la complétion est pilotée par les vies (une leçon est terminée quand toutes ses questions sont finalement réussies sans épuiser les vies de la tentative — voir ADR 0001).
 
 ## 2. Étapes (`steps`)
 
@@ -158,10 +158,11 @@ Champ commun : `type: "quiz"`, puis `quiz.type` détermine la sous-structure.
 ## 4. Règles de validation
 
 - Une leçon doit contenir **au moins une étape**.
-- Une leçon doit contenir **au moins une étape de type `quiz`** (sinon aucune évaluation possible → pas de score, pas de déblocage de la suite).
+- Une leçon doit contenir **au moins une étape de type `quiz`** (sinon aucune évaluation possible → pas de déblocage de la suite).
 - `correctIndex` / `correctIndexes` doivent référencer des index valides du tableau `choices`.
 - `pairs`, `tokens`, `choices` : minimum 2 éléments.
-- Les slugs de cours doivent être uniques ; en cas de conflit à l'import, le back-office propose de renommer ou de mettre à jour le cours existant (choix explicite, jamais d'écrasement silencieux).
+- **Médias** : uniquement `image` ou `audio` avec une URL **HTTPS** valide ; toute autre URL/type est rejetée. Le corps Markdown est assaini au rendu (pas de HTML brut/scripts).
+- Les slugs de cours doivent être uniques ; en cas de conflit à l'import, l'import est **refusé** et demande un nouveau slug (import = **création seule** en v1, jamais de mise à jour/écrasement d'un cours existant — l'édition passe par le back-office).
 - L'import est **transactionnel** : si une seule leçon du fichier est invalide, rien n'est inséré en base (tout ou rien), afin d'éviter des cours à moitié importés.
 
 ## 5. Évolutions possibles (hors v1)
