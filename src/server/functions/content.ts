@@ -54,6 +54,22 @@ export const getCourseTree = createServerFn({ method: 'GET' })
     })
   })
 
+/** Charge une leçon (même non publiée) avec les réponses, pour la preview admin. */
+export const getLessonForPreview = createServerFn({ method: 'GET' })
+  .validator((id: string) => z.string().uuid().parse(id))
+  .handler(async ({ data: lessonId }) => {
+    await assertAdmin()
+    return db.query.lessons.findFirst({
+      where: eq(lessons.id, lessonId),
+      with: {
+        steps: {
+          orderBy: (s, { asc: a }) => [a(s.position)],
+          with: { question: true },
+        },
+      },
+    })
+  })
+
 // --- Cours ---------------------------------------------------------------
 
 async function uniqueSlug(base: string): Promise<string> {

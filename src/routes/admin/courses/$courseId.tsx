@@ -218,6 +218,15 @@ function LessonBlock({
         <button onClick={() => setAdding('quiz')} className="rounded border px-2 py-1 text-xs">
           + Quiz
         </button>
+        {lesson.steps.length > 0 && (
+          <Link
+            to="/admin/lessons/$lessonId/preview"
+            params={{ lessonId: lesson.id }}
+            className="rounded border px-2 py-1 text-xs"
+          >
+            👁 Prévisualiser
+          </Link>
+        )}
       </div>
       {adding === 'content' && (
         <ContentStepForm
