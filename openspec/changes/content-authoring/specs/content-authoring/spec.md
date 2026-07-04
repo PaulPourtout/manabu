@@ -42,4 +42,16 @@ Le système SHALL permettre à un admin de prévisualiser une leçon comme un ap
 
 #### Scenario: Prévisualiser une leçon brouillon
 - **WHEN** un admin ouvre la prévisualisation d'une leçon non publiée
-- **THEN** il voit le rendu du player (contenu + quiz) sans que la leçon soit visible côté apprenant
+- **THEN** il voit le rendu **interactif à blanc** du player (contenu + quiz jouables, feedback actif) sans qu'aucune progression/XP ne soit écrite, et sans que la leçon soit visible côté apprenant
+
+### Requirement: Contenu assaini et médias restreints
+
+Le système SHALL n'autoriser qu'un contenu sûr : Markdown rendu sans HTML brut/scripts, et médias limités aux images/audio en HTTPS avec URL validée.
+
+#### Scenario: HTML dangereux neutralisé
+- **WHEN** un corps de contenu contient du HTML brut ou une balise `<script>`
+- **THEN** le rendu est assaini (le HTML dangereux est retiré), aucun script n'est exécuté côté apprenant
+
+#### Scenario: Média non conforme rejeté
+- **WHEN** un média référence une URL non HTTPS ou un type autre qu'image/audio
+- **THEN** la sauvegarde/import est refusée avec un message explicite

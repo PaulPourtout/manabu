@@ -34,11 +34,12 @@ services:
         pnpm run generate-routes
         pnpm drizzle-kit migrate
         pnpm dev --host 0.0.0.0
-    # Les clés Clerk (et un éventuel override) sont lues depuis le .env racine.
+    # Les secrets Better Auth (BETTER_AUTH_SECRET/URL, email…) sont lus du .env racine.
     env_file:
       - ../.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-manabu}:${POSTGRES_PASSWORD:-manabu}@db:5432/${POSTGRES_DB:-manabu}
+      BETTER_AUTH_URL: http://localhost:3000
       NODE_ENV: development
       PORT: 3000
     ports:

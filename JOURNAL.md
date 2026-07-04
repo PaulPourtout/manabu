@@ -49,9 +49,27 @@ features est piloté par **OpenSpec** (`openspec/changes/`).
 
 ---
 
+### 2026-07-04 — Grilling, décisions produit & bascule Better Auth
+
+- **Session de grilling** (skill `grill-with-docs`) : création de `CONTEXT.md` (glossaire) et des ADR.
+- **Décisions actées** :
+  - Complétion **pilotée par les vies**, sans seuil de score ; **vies par tentative** (3), remise en file, échec → reprise immédiate, **pas de timer** (ADR 0001).
+  - Reprise en cours de leçon **persistée**.
+  - Déverrouillage **linéaire strict** ; streak dans le **fuseau de l'apprenant**.
+  - Preview **interactive à blanc** ; contenu **assaini** (Markdown, médias HTTPS image/audio).
+  - Import **création seule** (slug conflit → nouveau slug).
+  - **Bascule Clerk → Better Auth** (auto-hébergé, MFA gratuite, rôle en base ; ADR 0003, ADR 0002 caduc). Désactivation = ban/unban Better Auth.
+- **Réconciliation appliquée** :
+  - Fondation : deps (`better-auth`, retrait `@clerk/*`/`svix`), config serveur/client, route `/api/auth/$`, `__root` nettoyé, `.env`/compose. **Auth testée en runtime** (sign-up + get-session OK, user en base).
+  - Schéma : table `user` (Better Auth + rôle/ban/gamification/timezone), état de tentative sur `user_lesson_progress`, retrait `pass_threshold`/`best_score`/hearts globaux ; migration régénérée (15 tables) ; migrate + seed validés.
+  - Specs OpenSpec réécrites : `auth-mfa` (ex auth-clerk-mfa), `lesson-player`, `gamification`, `course-import`, `content-authoring` ; **nouveau change `user-management`**. Les 6 changes valident.
+  - Docs alignées : PRD, ARCHITECTURE, LESSON_FORMAT, README, CONTEXT, ADR.
+
+---
+
 ## En cours
 
-- Rien en cours d'implémentation. Les fondations sont posées ; l'implémentation des features attend le lancement des changes OpenSpec.
+- Rien en cours d'implémentation. Fondations + specs à jour ; l'implémentation attend le lancement des changes OpenSpec.
 
 ---
 
@@ -59,18 +77,19 @@ features est piloté par **OpenSpec** (`openspec/changes/`).
 
 Ordre d'implémentation recommandé (dépendances) :
 
-1. **`auth-clerk-mfa`** — prérequis de tout le reste (identité + guards). Nécessite des clés Clerk réelles dans `.env`.
-2. **`content-authoring`** — permet de créer du contenu (dépend de l'auth admin).
-3. **`course-import`** — accélère la création de contenu (réutilise la validation de content-authoring).
+1. **`auth-mfa`** — prérequis (identité + guards) ; fondation déjà posée, reste pages login/register, guards, MFA, emails.
+2. **`content-authoring`** — création de contenu (dépend de l'auth admin).
+3. **`course-import`** — accélère la création (réutilise la validation de content-authoring).
 4. **`lesson-player`** — expérience apprenant (dépend d'avoir du contenu).
 5. **`gamification`** — se greffe sur le player.
+6. **`user-management`** — gestion des comptes/rôles (dépend de l'auth).
 
 Pour démarrer une feature : `openspec show <change>` puis `/opsx:apply` (ou skill `openspec-apply-change`).
 
 ### À trancher avant/pendant l'implémentation
-- Clés Clerk (instance dev) + activation MFA dans le dashboard.
-- Politique de régénération des vies (délai, régén partielle) — cf. `docs/ARCHITECTURE.md` §11.
-- Fuseau horaire de référence du streak (serveur en v1).
+- Montants d'XP (base + bonus « parfait ») ; nombre de vies par tentative (défaut 3).
+- Détection/stockage du fuseau utilisateur (fallback si absent).
+- Branchement d'un provider d'emails (vérification / réinitialisation Better Auth).
 
 ### Non couvert en v1 (rappel)
 App native, paiement/achat de vies, social (amis/ligues/classements), notifications push/email, i18n de l'UI.

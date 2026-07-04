@@ -4,8 +4,9 @@
  * Idempotent sur les données de référence (badges, slug de cours) : on peut
  * le relancer sans dupliquer. Lancé via `pnpm db:seed` (nécessite la DB up).
  *
- * NB : les utilisateurs viennent de Clerk (créés au premier login via webhook),
- * donc on ne seed pas de compte ici — seulement du contenu et des badges.
+ * NB : les utilisateurs sont créés via Better Auth (inscription), donc on ne
+ * seed pas de compte ici — seulement du contenu et des badges. Pour obtenir un
+ * admin : s'inscrire via l'app puis `UPDATE "user" SET role='admin' WHERE ...`.
  */
 import 'dotenv/config'
 import { eq } from 'drizzle-orm'
