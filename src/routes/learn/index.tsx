@@ -1,6 +1,8 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { requireUser } from '../../lib/auth/session'
 import { getLearningPath } from '../../server/functions/lessons'
+import { syncTimezone } from '../../server/functions/gamification'
 
 export const Route = createFileRoute('/learn/')({
   beforeLoad: () => requireUser(),
@@ -10,6 +12,12 @@ export const Route = createFileRoute('/learn/')({
 
 function LearnPath() {
   const { path } = Route.useLoaderData()
+
+  // Détecte et enregistre le fuseau de l'apprenant (pour le calcul de la série).
+  useEffect(() => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (tz) syncTimezone({ data: tz }).catch(() => {})
+  }, [])
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col gap-6 p-4 sm:p-6">

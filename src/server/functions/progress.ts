@@ -10,6 +10,7 @@ import { db } from '../../db/index.ts'
 import type { QuizData } from '../../db/schema.ts'
 import { lessonSteps, lessons, userLessonProgress, userStepAttempts } from '../../db/schema.ts'
 import { requireUser } from '../../lib/auth/session.ts'
+import { onLessonCompleted } from './gamification.ts'
 
 const START_HEARTS = 3
 
@@ -102,6 +103,8 @@ export type SubmitResult = {
   status: 'in_progress' | 'completed'
   failed: boolean
   currentStepId: string | null
+  xpGained: number
+  newBadges: string[]
 }
 
 export const submitStep = createServerFn({ method: 'POST' })
@@ -156,6 +159,8 @@ export const submitStep = createServerFn({ method: 'POST' })
         heartsRemaining: hearts,
         status: 'in_progress',
         failed: false,
+        xpGained: 0,
+        newBadges: [],
         currentStepId: queue[0] ?? null,
       }
     }
@@ -197,10 +202,13 @@ export const submitStep = createServerFn({ method: 'POST' })
           status: 'in_progress',
           failed: true,
           currentStepId: null,
+          xpGained: 0,
+          newBadges: [],
         }
       }
     }
 
+    const now = new Date()
     const completed = queue.length === 0
     await upsertAttempt(user.id, data.lessonId, {
       status: completed ? 'completed' : 'in_progress',
@@ -208,9 +216,15 @@ export const submitStep = createServerFn({ method: 'POST' })
       heartsRemaining: hearts,
       requeueStepIds: queue,
       perfect,
-      completedAt: completed ? new Date() : null,
-      lastAttemptAt: new Date(),
+      completedAt: completed ? now : null,
+      lastAttemptAt: now,
     })
+
+    // Effets de gamification à la complétion (XP, série, badges).
+    let reward = { xpGained: 0, newBadges: [] as string[] }
+    if (completed) {
+      reward = await onLessonCompleted(user.id, data.lessonId, perfect, now)
+    }
 
     return {
       correct,
@@ -219,6 +233,8 @@ export const submitStep = createServerFn({ method: 'POST' })
       status: completed ? 'completed' : 'in_progress',
       failed: false,
       currentStepId: queue[0] ?? null,
+      xpGained: reward.xpGained,
+      newBadges: reward.newBadges,
     }
   })
 
