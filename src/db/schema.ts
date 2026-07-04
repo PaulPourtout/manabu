@@ -5,14 +5,19 @@
  *   - une lesson_step est soit du contenu (`content`) soit un quiz (`quiz`)
  *   - une step de type `quiz` porte une quiz_questions associée (1-1)
  *
- * Auth : gérée par Clerk. On ne stocke ni mot de passe ni session ici ;
- * `user_profiles` est le miroir local d'un utilisateur Clerk (clé `clerkUserId`),
- * enrichi des données propres à l'app (rôle, gamification).
+ * Auth : gérée par Better Auth (voir ADR 0003 et `src/db/auth-schema.ts`).
+ * La table `user` (générée par Better Auth) porte l'identité, le rôle
+ * (`learner`/`admin`, plugin admin), le bannissement (= désactivation) et les
+ * champs applicatifs (XP, série, fuseau). On y référence `user.id` (text).
+ *
+ * Complétion des leçons : pilotée par les vies, pas par un score (ADR 0001).
+ * L'état d'une tentative en cours (étape courante, vies restantes, file de
+ * remise) est persisté sur `user_lesson_progress` pour permettre la reprise.
  *
  * Le contenu variable (choix de quiz, corps de leçon, médias) est stocké en
  * `jsonb` pour rester flexible et cohérent avec le format d'import JSON.
  */
-import { relations, sql } from 'drizzle-orm'
+import { relations } from 'drizzle-orm'
 import {
   boolean,
   index,
@@ -20,18 +25,21 @@ import {
   jsonb,
   pgEnum,
   pgTable,
-  real,
   text,
   timestamp,
   unique,
   uuid,
 } from 'drizzle-orm/pg-core'
 
+// Tables d'authentification gérées par Better Auth (générées).
+import { user } from './auth-schema.ts'
+
+// Re-export pour que `db` (et drizzle-kit) connaissent toutes les tables.
+export * from './auth-schema.ts'
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
-
-export const userRoleEnum = pgEnum('user_role', ['learner', 'admin'])
 
 export const stepTypeEnum = pgEnum('step_type', ['content', 'quiz'])
 
@@ -48,38 +56,6 @@ export const progressStatusEnum = pgEnum('progress_status', [
   'in_progress',
   'completed',
 ])
-
-// ---------------------------------------------------------------------------
-// Utilisateurs (miroir local de Clerk)
-// ---------------------------------------------------------------------------
-
-export const userProfiles = pgTable(
-  'user_profiles',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    clerkUserId: text('clerk_user_id').notNull(),
-    email: text('email'),
-    name: text('name'),
-    avatarUrl: text('avatar_url'),
-    role: userRoleEnum('role').notNull().default('learner'),
-
-    // Gamification
-    xpTotal: integer('xp_total').notNull().default(0),
-    currentStreak: integer('current_streak').notNull().default(0),
-    longestStreak: integer('longest_streak').notNull().default(0),
-    lastActivityDate: timestamp('last_activity_date', { withTimezone: true }),
-    hearts: integer('hearts').notNull().default(5),
-    heartsRefillAt: timestamp('hearts_refill_at', { withTimezone: true }),
-
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [unique('user_profiles_clerk_user_id_unique').on(t.clerkUserId)],
-)
 
 // ---------------------------------------------------------------------------
 // Contenu pédagogique
@@ -127,8 +103,6 @@ export const lessons = pgTable(
     title: text('title').notNull(),
     position: integer('position').notNull().default(0),
     isPublished: boolean('is_published').notNull().default(true),
-    // Seuil de réussite au quiz pour valider la leçon (0..1)
-    passThreshold: real('pass_threshold').notNull().default(0.7),
   },
   (t) => [index('lessons_unit_id_idx').on(t.unitId)],
 )
@@ -161,27 +135,35 @@ export const quizQuestions = pgTable(
     // Payload variable selon `type` (choices/correctIndex, pairs, tokens, etc.)
     data: jsonb('data').notNull(),
   },
-  (t) => [
-    unique('quiz_questions_lesson_step_id_unique').on(t.lessonStepId),
-  ],
+  (t) => [unique('quiz_questions_lesson_step_id_unique').on(t.lessonStepId)],
 )
 
 // ---------------------------------------------------------------------------
-// Progression & gamification
+// Progression & tentative en cours
 // ---------------------------------------------------------------------------
 
 export const userLessonProgress = pgTable(
   'user_lesson_progress',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
+    userId: text('user_id')
       .notNull()
-      .references(() => userProfiles.id, { onDelete: 'cascade' }),
+      .references(() => user.id, { onDelete: 'cascade' }),
     lessonId: uuid('lesson_id')
       .notNull()
       .references(() => lessons.id, { onDelete: 'cascade' }),
     status: progressStatusEnum('status').notNull().default('not_started'),
-    bestScore: real('best_score'),
+
+    // État d'une tentative en cours (null hors tentative) — permet la reprise.
+    currentStepId: uuid('current_step_id').references(() => lessonSteps.id, {
+      onDelete: 'set null',
+    }),
+    heartsRemaining: integer('hearts_remaining'),
+    // Ids d'étapes quiz ratées à re-présenter avant la fin (file de remise).
+    requeueStepIds: jsonb('requeue_step_ids'),
+    // Vrai tant qu'aucune vie n'a été perdue sur la tentative en cours/complétée.
+    perfect: boolean('perfect'),
+
     lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -198,9 +180,9 @@ export const userStepAttempts = pgTable(
   'user_step_attempts',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
+    userId: text('user_id')
       .notNull()
-      .references(() => userProfiles.id, { onDelete: 'cascade' }),
+      .references(() => user.id, { onDelete: 'cascade' }),
     lessonStepId: uuid('lesson_step_id')
       .notNull()
       .references(() => lessonSteps.id, { onDelete: 'cascade' }),
@@ -211,6 +193,10 @@ export const userStepAttempts = pgTable(
   },
   (t) => [index('user_step_attempts_user_id_idx').on(t.userId)],
 )
+
+// ---------------------------------------------------------------------------
+// Gamification : badges & journal d'XP
+// ---------------------------------------------------------------------------
 
 export const badges = pgTable(
   'badges',
@@ -228,9 +214,9 @@ export const userBadges = pgTable(
   'user_badges',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
+    userId: text('user_id')
       .notNull()
-      .references(() => userProfiles.id, { onDelete: 'cascade' }),
+      .references(() => user.id, { onDelete: 'cascade' }),
     badgeId: uuid('badge_id')
       .notNull()
       .references(() => badges.id, { onDelete: 'cascade' }),
@@ -245,9 +231,9 @@ export const xpEvents = pgTable(
   'xp_events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
+    userId: text('user_id')
       .notNull()
-      .references(() => userProfiles.id, { onDelete: 'cascade' }),
+      .references(() => user.id, { onDelete: 'cascade' }),
     amount: integer('amount').notNull(),
     reason: text('reason').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
@@ -300,19 +286,12 @@ export const quizQuestionsRelations = relations(quizQuestions, ({ one }) => ({
   }),
 }))
 
-export const userProfilesRelations = relations(userProfiles, ({ many }) => ({
-  progress: many(userLessonProgress),
-  attempts: many(userStepAttempts),
-  badges: many(userBadges),
-  xpEvents: many(xpEvents),
-}))
-
 export const userLessonProgressRelations = relations(
   userLessonProgress,
   ({ one }) => ({
-    user: one(userProfiles, {
+    user: one(user, {
       fields: [userLessonProgress.userId],
-      references: [userProfiles.id],
+      references: [user.id],
     }),
     lesson: one(lessons, {
       fields: [userLessonProgress.lessonId],
@@ -322,15 +301,12 @@ export const userLessonProgressRelations = relations(
 )
 
 export const userBadgesRelations = relations(userBadges, ({ one }) => ({
-  user: one(userProfiles, {
+  user: one(user, {
     fields: [userBadges.userId],
-    references: [userProfiles.id],
+    references: [user.id],
   }),
   badge: one(badges, {
     fields: [userBadges.badgeId],
     references: [badges.id],
   }),
 }))
-
-// Le `sql` import est réservé aux futures colonnes générées / defaults SQL.
-void sql
