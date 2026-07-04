@@ -29,6 +29,10 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    // v1 dev : pas de vérification d'email (nécessiterait un provider d'envoi).
+    // À passer à true en prod une fois l'email branché (cf. tasks 4.x).
+    requireEmailVerification: false,
+    autoSignIn: true,
   },
   user: {
     additionalFields: {
