@@ -32,13 +32,12 @@ function AdminDashboard() {
       <header className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">Back-office</h1>
         <div className="flex gap-3 text-sm">
-          {/* Routes créées par les changes course-import / user-management. */}
-          <a href="/admin/import" className="underline">
+          <Link to="/admin/import" className="underline">
             Importer
-          </a>
-          <a href="/admin/users" className="underline">
+          </Link>
+          <Link to="/admin/users" className="underline">
             Utilisateurs
-          </a>
+          </Link>
         </div>
       </header>
 
