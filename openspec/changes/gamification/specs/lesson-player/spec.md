@@ -1,25 +1,21 @@
 ## MODIFIED Requirements
 
-### Requirement: Sauvegarde de progression et score
+### Requirement: Sauvegarde de progression
 
-Le système SHALL sauvegarder la progression par étape, calculer le statut de complétion selon le seuil de la leçon, et déclencher les effets de gamification associés (XP, streak, consommation de vies).
+Le système SHALL persister l'état de la tentative à chaque étape validée (afin de permettre la reprise sans perte), et déclencher à la complétion les effets de gamification (XP, streak). La consommation de vies s'applique aux réponses incorrectes durant la tentative.
 
 #### Scenario: Sauvegarde par étape
 - **WHEN** l'apprenant valide une étape
-- **THEN** la progression est persistée immédiatement (aucune perte si l'onglet est fermé ensuite)
+- **THEN** l'état de la tentative (étape courante, file de remise, vies restantes) est persisté immédiatement (aucune perte si l'onglet est fermé ensuite)
 
-#### Scenario: Complétion au-dessus du seuil
-- **WHEN** le score de quiz de la leçon atteint ou dépasse `pass_threshold`
-- **THEN** la leçon passe au statut `completed`, `best_score` est mis à jour, l'XP est attribuée et le streak actualisé
-
-#### Scenario: Score sous le seuil
-- **WHEN** le score est inférieur au seuil
-- **THEN** la leçon reste `in_progress` (non validée) et l'apprenant peut réessayer
+#### Scenario: Complétion enregistrée définitivement
+- **WHEN** une leçon est complétée
+- **THEN** son statut `completed` est acquis de façon permanente, l'XP est attribuée et le streak actualisé
 
 #### Scenario: Réponse incorrecte consomme une vie
-- **WHEN** l'apprenant répond incorrectement à un quiz et qu'il lui reste des vies
-- **THEN** une vie est décrémentée et la tentative enregistrée
+- **WHEN** l'apprenant répond incorrectement à un quiz durant la tentative
+- **THEN** une vie de la tentative est décrémentée et la question est remise en file
 
-#### Scenario: Soumission bloquée sans vie
-- **WHEN** l'apprenant n'a plus de vie
-- **THEN** la soumission de réponse est refusée jusqu'à régénération des vies
+#### Scenario: Échec de tentative à zéro vie
+- **WHEN** les vies de la tentative atteignent zéro
+- **THEN** la tentative échoue (aucune complétion) et peut être recommencée immédiatement depuis le début avec des vies fraîches

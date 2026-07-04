@@ -24,10 +24,14 @@ Le système SHALL valider le fichier avant insertion et signaler précisément l
 - **WHEN** une leçon du fichier ne contient aucune étape de type quiz
 - **THEN** la validation échoue avec un message explicite
 
-### Requirement: Gestion des conflits de slug
+### Requirement: Import en création seule (pas de mise à jour en place)
 
-Le système SHALL ne jamais écraser silencieusement un cours existant portant le même slug.
+Le système SHALL, en v1, uniquement **créer** un nouveau cours à l'import ; il ne met jamais à jour ni n'écrase un cours existant. L'édition d'un cours existant passe par le back-office CRUD.
 
 #### Scenario: Slug déjà utilisé
 - **WHEN** le slug du cours importé existe déjà
-- **THEN** le système propose explicitement de renommer (nouveau slug) ou de mettre à jour le cours existant, sans écrasement automatique
+- **THEN** l'import est refusé et le système demande un nouveau slug (nouveau cours), sans jamais modifier le cours existant
+
+#### Scenario: Import réussi crée un cours neuf
+- **WHEN** le slug est libre (ou renommé)
+- **THEN** un nouveau cours est créé, les cours existants restent intacts (aucune progression apprenant affectée)

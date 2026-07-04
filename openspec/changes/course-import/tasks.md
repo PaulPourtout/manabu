@@ -8,7 +8,7 @@
 
 - [ ] 2.1 `src/server/functions/import.ts` : `importCourse` (protégé `requireAdmin`)
 - [ ] 2.2 Insertion transactionnelle (`db.transaction`) de toute la hiérarchie
-- [ ] 2.3 Détection de conflit de slug (renommer / mettre à jour, sans écrasement)
+- [ ] 2.3 Détection de conflit de slug → refus + demande d'un nouveau slug (création seule)
 - [ ] 2.4 Retour d'erreurs Zod avec chemin du champ
 
 ## 3. Interface d'import

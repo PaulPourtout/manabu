@@ -19,7 +19,7 @@ Le format d'import est spécifié dans `docs/LESSON_FORMAT.md`. L'import doit ê
 - **Schéma Zod dédié import** (`src/lib/validation/import.ts`) composé à partir des schémas de contenu, reflétant le format documenté (course/units/lessons/steps/quiz).
 - **Server function** `importCourse` protégée `requireAdmin`, exécutée dans une transaction Drizzle (`db.transaction`).
 - **Erreurs** : les erreurs Zod (avec `path`) sont renvoyées telles quelles et formatées côté UI.
-- **Conflit de slug** : détection avant insertion ; la réponse indique le conflit et attend un choix (renommer / mettre à jour) — pas de résolution automatique.
+- **Conflit de slug** : détection avant insertion ; l'import est refusé et demande un nouveau slug. Pas de mise à jour en place en v1 (évite toute perte de progression liée aux `lesson.id` existants).
 - **UI** : upload de fichier OU zone de texte JSON, aperçu du nombre d'unités/leçons détectées avant confirmation.
 
 ## Risks / Trade-offs

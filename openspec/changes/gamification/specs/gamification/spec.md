@@ -2,55 +2,63 @@
 
 ### Requirement: Attribution d'XP
 
-Le système SHALL attribuer de l'XP à la complétion d'une leçon et cumuler l'XP sur le profil.
+Le système SHALL attribuer de l'XP à la complétion d'une leçon et cumuler l'XP sur l'utilisateur.
 
 #### Scenario: XP à la complétion
-- **WHEN** un apprenant complète une leçon (score ≥ seuil)
-- **THEN** un montant d'XP est ajouté, journalisé dans `xp_events`, et `user_profiles.xp_total` est mis à jour
+- **WHEN** un apprenant complète une leçon
+- **THEN** un montant d'XP est ajouté, journalisé dans `xp_events`, et `user.xp_total` est mis à jour
 
-#### Scenario: Bonus score parfait
-- **WHEN** la leçon est complétée avec un score parfait
+#### Scenario: Bonus leçon parfaite
+- **WHEN** la leçon est complétée sans avoir perdu la moindre vie
 - **THEN** un bonus d'XP s'ajoute au montant de base
 
 ### Requirement: Série de jours (streak)
 
-Le système SHALL maintenir une série de jours d'activité.
+Le système SHALL maintenir une série de jours d'activité, calculée dans le fuseau horaire de l'apprenant.
 
 #### Scenario: Incrément quotidien
-- **WHEN** un apprenant complète au moins une leçon un jour donné
+- **WHEN** un apprenant complète au moins une leçon un jour donné (dans son fuseau)
 - **THEN** son `current_streak` est incrémenté au plus une fois pour ce jour et `longest_streak` mis à jour si dépassé
 
 #### Scenario: Rupture de série
-- **WHEN** un apprenant passe un jour civil sans compléter de leçon
+- **WHEN** un apprenant passe un jour civil (dans son fuseau) sans compléter de leçon
 - **THEN** son `current_streak` est remis à zéro lors de l'activité suivante
 
-### Requirement: Vies (hearts)
+#### Scenario: Fuseau de l'apprenant
+- **WHEN** le fuseau de l'apprenant est connu (détecté et stocké sur `user.timezone`)
+- **THEN** le « jour » de la série est calculé sur ce fuseau, pas sur celui du serveur
 
-Le système SHALL limiter les erreurs via un système de vies et régénérer les vies dans le temps.
+### Requirement: Vies par tentative
+
+Le système SHALL limiter les erreurs via des vies **propres à chaque tentative** de leçon (pas de pool global), et permettre de recommencer immédiatement après un échec.
+
+#### Scenario: Tentative avec vies fraîches
+- **WHEN** un apprenant démarre (ou recommence) une tentative de leçon
+- **THEN** elle débute avec un nombre de vies défini (défaut 3), indépendant des autres leçons
 
 #### Scenario: Perte de vie sur erreur
-- **WHEN** un apprenant répond incorrectement à un quiz
-- **THEN** une vie est décrémentée
+- **WHEN** l'apprenant répond incorrectement à un quiz durant la tentative
+- **THEN** une vie de la tentative est décrémentée
 
-#### Scenario: Blocage à zéro vie
-- **WHEN** l'apprenant atteint 0 vie
-- **THEN** il ne peut plus soumettre de réponse tant que les vies ne sont pas régénérées, et l'UI l'indique
-
-#### Scenario: Régénération des vies
-- **WHEN** le délai de régénération est écoulé
-- **THEN** les vies sont restaurées (jusqu'au maximum)
+#### Scenario: Échec à zéro vie puis reprise immédiate
+- **WHEN** les vies de la tentative atteignent zéro
+- **THEN** la tentative échoue et l'apprenant peut la recommencer immédiatement depuis le début, avec des vies fraîches, sans délai d'attente
 
 ### Requirement: Déverrouillage progressif
 
-Le système SHALL verrouiller les leçons/unités tant que leur prérequis n'est pas complété.
+Le système SHALL verrouiller les leçons selon un ordre linéaire strict au sein d'un cours (séquence aplatie des unités puis leçons).
+
+#### Scenario: Première leçon ouverte
+- **WHEN** un apprenant ouvre un cours publié
+- **THEN** la première leçon du cours est jouable
 
 #### Scenario: Leçon verrouillée
-- **WHEN** un apprenant tente d'ouvrir une leçon dont la précédente n'est pas complétée
+- **WHEN** un apprenant tente d'ouvrir une leçon dont la précédente (dans la séquence aplatie) n'est pas complétée
 - **THEN** l'accès est refusé et la leçon est affichée comme verrouillée
 
 #### Scenario: Déverrouillage après complétion
-- **WHEN** l'apprenant complète la leçon prérequise
-- **THEN** la leçon/unité suivante devient jouable
+- **WHEN** l'apprenant complète la leçon prérequise (y compris à une frontière d'unité)
+- **THEN** la leçon suivante devient jouable
 
 ### Requirement: Badges
 

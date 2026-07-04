@@ -7,7 +7,7 @@ Créer un cours entier à la main est fastidieux. Les admins doivent pouvoir imp
 - Page `admin/import` permettant d'uploader/coller un fichier JSON de cours.
 - Validation stricte du fichier avec Zod (le format est décrit dans `docs/LESSON_FORMAT.md`), avec retour d'erreurs localisées (chemin du champ fautif).
 - Insertion **transactionnelle** (tout ou rien) du cours et de sa hiérarchie.
-- Gestion des conflits de slug (proposer de renommer ou mettre à jour, jamais d'écrasement silencieux).
+- **Création seule** : en cas de slug déjà existant, on demande un nouveau slug (jamais de mise à jour/écrasement d'un cours existant — l'édition passe par le CRUD).
 - Import en statut brouillon par défaut.
 
 ## Capabilities
