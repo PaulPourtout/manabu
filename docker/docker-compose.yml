@@ -1,0 +1,55 @@
+# Base : Postgres + app en mode DEV (hot-reload).
+# Lancer depuis la racine du projet :
+#   docker compose -f docker/docker-compose.yml up
+#
+# Pour la PROD, ajouter l'override :
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml up --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-manabu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-manabu}
+      POSTGRES_DB: ${POSTGRES_DB:-manabu}
+    ports:
+      - '5432:5432'
+    volumes:
+      - manabu_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-manabu} -d ${POSTGRES_DB:-manabu}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: node:22-alpine
+    working_dir: /app
+    entrypoint: ['sh', '-c']
+    command:
+      - |
+        corepack enable
+        pnpm install
+        pnpm run generate-routes
+        pnpm drizzle-kit migrate
+        pnpm dev --host 0.0.0.0
+    # Les clés Clerk (et un éventuel override) sont lues depuis le .env racine.
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-manabu}:${POSTGRES_PASSWORD:-manabu}@db:5432/${POSTGRES_DB:-manabu}
+      NODE_ENV: development
+      PORT: 3000
+    ports:
+      - '3000:3000'
+    volumes:
+      - ..:/app
+      - manabu_node_modules:/app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  manabu_pgdata:
+  manabu_node_modules:

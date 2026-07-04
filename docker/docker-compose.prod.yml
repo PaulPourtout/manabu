@@ -1,0 +1,20 @@
+# Override PROD : build de l'image via le Dockerfile multi-stage, pas de bind mount.
+# Lancer :
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml up --build -d
+
+services:
+  app:
+    image: manabu:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: runtime
+    entrypoint: []
+    command: ['./docker/entrypoint.sh']
+    environment:
+      NODE_ENV: production
+    volumes: []
+    restart: unless-stopped
+
+  db:
+    ports: []
