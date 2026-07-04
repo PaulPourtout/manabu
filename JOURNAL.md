@@ -67,9 +67,25 @@ features est piloté par **OpenSpec** (`openspec/changes/`).
 
 ---
 
+### 2026-07-04 (suite) — Implémentation des 6 changes (branches + PR)
+
+- **auth-mfa** implémenté et **archivé** (guards, login/register/profil, MFA + QR, désactivation) ; vérifié en runtime (guards, sign-up, MFA enable). Branche `feat/auth-and-reconciliation`.
+- **content-authoring** : validation Zod partagée, server fns CRUD, dashboard `/admin` + éditeur de cours, formulaires contenu/quiz, preview interactive à blanc. Branche `feat/content-authoring`.
+- **course-import** : `importCourse` transactionnel (création seule, conflit de slug → nouveau slug), page `/admin/import`. Validation vérifiée (exemple du doc + cas invalides avec chemins). Branche `feat/course-import`.
+- **lesson-player** : `getLearningPath`/`getLessonForPlay`/`startAttempt`/`submitStep`, éval serveur des 5 types, file de remise, vies par tentative, complétion (ADR 0001), carte `/learn`, player, rendu Markdown sûr. Branche `feat/lesson-player`.
+- **gamification** : XP (base + bonus parfait), série (fuseau utilisateur), badges auto, branchés à la complétion ; XP/série/badges au profil, XP à l'écran de résultat, détection de fuseau. Branche `feat/gamification`.
+- **user-management** : `/admin/users` (liste, rôle learner↔admin, désactiver/réactiver) avec garde-fous « dernier admin ». Branche `feat/user-management`.
+
+**Qualité** : typecheck + build **verts** à chaque étape. **Commits séparés par étape**, branches poussées sur GitHub (empilées : chaque change part du précédent) — PR à ouvrir manuellement (pas de `gh` dans l'env).
+
+**Reste à faire (passe runtime navigateur)** : jouer une leçon de bout en bout (player + gamification), import réel en base, preview, actions user-management. Non fait ce jour car le démon Docker (Rachner Desktop) de l'environnement est instable/indisponible. Les lectures SSR et l'infra ont été validées en runtime plus tôt.
+
+---
+
 ## En cours
 
-- Rien en cours d'implémentation. Fondations + specs à jour ; l'implémentation attend le lancement des changes OpenSpec.
+- Passe de vérification runtime (navigateur + DB) des flux apprenant/admin, à faire quand Docker est disponible.
+- Ouverture/merge des PR sur GitHub (branches poussées, ordre : auth-and-reconciliation → content-authoring → course-import → lesson-player → gamification → user-management).
 
 ---
 
