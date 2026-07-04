@@ -34,6 +34,10 @@ function LessonPlayer() {
   )
   const [solved, setSolved] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [reward, setReward] = useState<{ xpGained: number; newBadges: string[] }>({
+    xpGained: 0,
+    newBadges: [],
+  })
 
   // Démarre ou reprend une tentative au montage.
   useEffect(() => {
@@ -69,6 +73,9 @@ function LessonPlayer() {
     if (res.failed) {
       setPhase('failed')
       return
+    }
+    if (res.status === 'completed') {
+      setReward({ xpGained: res.xpGained, newBadges: res.newBadges })
     }
     if (current.type === 'content') {
       setSolved((s) => s + 1)
@@ -114,6 +121,10 @@ function LessonPlayer() {
         <p className="text-5xl">🎉</p>
         <h1 className="text-2xl font-bold">Leçon terminée !</h1>
         <p className="text-gray-600">Bravo, toutes les questions sont réussies.</p>
+        <p className="text-lg font-semibold text-green-600">+{reward.xpGained} XP</p>
+        {reward.newBadges.length > 0 && (
+          <p className="text-sm">🏅 Nouveau badge : {reward.newBadges.join(', ')}</p>
+        )}
         <button
           onClick={() => navigate({ to: '/learn' })}
           className="min-h-11 rounded-lg bg-black px-6 font-medium text-white"

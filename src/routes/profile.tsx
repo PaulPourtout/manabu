@@ -4,15 +4,18 @@ import QRCode from 'react-qr-code'
 import { authClient, signOut, useSession } from '../lib/auth/auth-client'
 import { requireUser } from '../lib/auth/session'
 import { parseTotpUri } from '../lib/auth/totp-uri'
+import { getMyGamification } from '../server/functions/gamification'
 
 export const Route = createFileRoute('/profile')({
   beforeLoad: () => requireUser(),
+  loader: async () => ({ stats: await getMyGamification() }),
   component: ProfilePage,
 })
 
 function ProfilePage() {
   const navigate = useNavigate()
   const { data: session } = useSession()
+  const { stats } = Route.useLoaderData()
   const user = session?.user
 
   async function onSignOut() {
@@ -28,11 +31,27 @@ function ProfilePage() {
           <p className="font-medium">{user.name}</p>
           <p className="text-gray-600">{user.email}</p>
           <p className="mt-2 text-gray-600">
-            XP : {(user as { xpTotal?: number }).xpTotal ?? 0} · Série :{' '}
-            {(user as { currentStreak?: number }).currentStreak ?? 0} j
+            ⭐ {stats.xpTotal} XP · 🔥 Série {stats.currentStreak} j (record{' '}
+            {stats.longestStreak})
           </p>
         </section>
       )}
+
+      <section className="rounded-lg border p-4">
+        <h2 className="font-semibold">Badges</h2>
+        {stats.badges.length === 0 ? (
+          <p className="mt-1 text-sm text-gray-500">Aucun badge pour l'instant.</p>
+        ) : (
+          <ul className="mt-2 flex flex-wrap gap-3">
+            {stats.badges.map((b) => (
+              <li key={b.code} className="flex flex-col items-center text-center text-xs">
+                <span className="text-2xl">{b.icon ?? '🏅'}</span>
+                <span>{b.title}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <TwoFactorSection
         enabled={Boolean((user as { twoFactorEnabled?: boolean })?.twoFactorEnabled)}
