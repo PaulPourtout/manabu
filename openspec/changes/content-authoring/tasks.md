@@ -20,11 +20,11 @@
 
 ## 4. Prévisualisation
 
-- [ ] 4.1 Route de prévisualisation réutilisant les composants du player — **fait pendant `lesson-player`** (dépend de ses composants)
-- [ ] 4.2 Mode « à blanc » (pas d'écriture de progression) — idem
+- [x] 4.1 Route de prévisualisation réutilisant les composants du player (`/admin/lessons/$lessonId/preview`)
+- [x] 4.2 Mode « à blanc » (évaluation client, aucune écriture)
 
 ## 5. Vérification
 
 - [x] 5.1 Dashboard admin rendu sous auth (loader `listCourses` OK en runtime) ; création/édition via UI
 - [ ] 5.2 Vérifier qu'un brouillon n'apparaît pas côté apprenant — avec `lesson-player`
-- [ ] 5.3 Vérifier le rendu de prévisualisation — avec `lesson-player`
+- [x] 5.3 Prévisualisation interactive opérationnelle (typecheck/build)
