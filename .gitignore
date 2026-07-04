@@ -24,3 +24,6 @@ test-results
 
 # Editor
 .idea
+
+# pnpm local store
+.pnpm-store/

@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
+import QRCode from 'react-qr-code'
 import { authClient, signOut, useSession } from '../lib/auth/auth-client'
 import { requireUser } from '../lib/auth/session'
+import { parseTotpUri } from '../lib/auth/totp-uri'
 
 export const Route = createFileRoute('/profile')({
   beforeLoad: () => requireUser(),
@@ -114,15 +116,57 @@ function TwoFactorSection({ enabled }: { enabled: boolean }) {
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           <p className="text-sm">
-            Ajoute cette clé à ton application d'authentification (TOTP) :
+            Scanne le QR code avec Google Authenticator, ou saisis la clé
+            manuellement (pas l&apos;URI complète).
           </p>
-          <code className="break-all rounded bg-gray-100 p-2 text-xs">
-            {totpUri}
-          </code>
+          {totpUri && (
+            <div className="flex flex-col items-center gap-3 rounded-md border bg-white p-4">
+              <QRCode
+                value={totpUri}
+                size={192}
+                aria-label="QR code pour configurer la double authentification"
+              />
+              {(() => {
+                const parsed = parseTotpUri(totpUri)
+                if (!parsed) {
+                  return (
+                    <code className="break-all rounded bg-gray-100 p-2 text-xs">
+                      {totpUri}
+                    </code>
+                  )
+                }
+
+                return (
+                  <div className="w-full space-y-2 text-sm">
+                    {parsed.issuer && (
+                      <p className="text-gray-600">
+                        Compte : {parsed.issuer}
+                        {parsed.account ? ` (${parsed.account})` : ''}
+                      </p>
+                    )}
+                    <label className="flex flex-col gap-1">
+                      <span className="font-medium">Clé de configuration (base32)</span>
+                      <code className="break-all rounded bg-gray-100 p-2 font-mono text-xs uppercase tracking-wide">
+                        {parsed.secret}
+                      </code>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(parsed.secret)}
+                      className="min-h-11 rounded-md border px-4 py-2 text-sm font-medium"
+                    >
+                      Copier la clé
+                    </button>
+                  </div>
+                )
+              })()}
+            </div>
+          )}
           {backupCodes.length > 0 && (
             <details className="text-sm">
               <summary className="cursor-pointer">
-                Codes de secours ({backupCodes.length})
+                Codes de secours ({backupCodes.length}) — à conserver, pas pour
+                l&apos;app d&apos;authentification
               </summary>
               <ul className="mt-2 grid grid-cols-2 gap-1 font-mono text-xs">
                 {backupCodes.map((c) => (
